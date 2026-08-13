@@ -1,0 +1,31 @@
+# Environment and local secrets
+.env
+.env.*
+!.env.example
+*.local
+
+# JavaScript
+**/node_modules/
+**/.npm-cache/
+**/dist/
+*.log
+
+# Java / Rust build output
+**/target/
+
+# Local data and generated packages
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+*.exe
+*.msi
+
+# IDE and OS metadata
+.idea/
+**/.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+

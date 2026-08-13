@@ -1,0 +1,43 @@
+spring:
+  application:
+    name: zhixu-backend
+  datasource:
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/testdb}
+    username: ${DATABASE_USERNAME:postgres}
+    password: ${DATABASE_PASSWORD}
+  sql:
+    init:
+      mode: always
+      encoding: UTF-8
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 11MB
+
+server:
+  port: ${SERVER_PORT:8080}
+
+zhixu:
+  pgvector:
+    host: ${PGVECTOR_HOST:localhost}
+    port: ${PGVECTOR_PORT:5432}
+    database: ${PGVECTOR_DATABASE:testdb}
+    user: ${PGVECTOR_USER:postgres}
+    password: ${PGVECTOR_PASSWORD:${DATABASE_PASSWORD}}
+    table: ${PGVECTOR_TABLE:knowledge_embeddings}
+    dimension: ${PGVECTOR_DIMENSION:1024}
+  ai:
+    chat-model: ${OPENAI_CHAT_MODEL:gpt-4o-mini}
+    embedding:
+      base-url: ${EMBEDDING_BASE_URL:http://localhost:8100/v1}
+      api-key: ${EMBEDDING_API_KEY:not-required}
+      model: ${EMBEDDING_MODEL:BAAI/bge-m3}
+  rag:
+    chunk-size: ${RAG_CHUNK_SIZE:500}
+    chunk-overlap: ${RAG_CHUNK_OVERLAP:80}
+    retrieval-top-k: ${RAG_RETRIEVAL_TOP_K:5}
+  auth:
+    access-token-ttl: ${ACCESS_TOKEN_TTL:3600}
+    refresh-token-ttl: ${REFRESH_TOKEN_TTL:2592000}
+  storage:
+    max-upload-bytes: ${MAX_UPLOAD_BYTES:10485760}
