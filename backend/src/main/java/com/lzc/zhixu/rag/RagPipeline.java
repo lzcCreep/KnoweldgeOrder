@@ -6,12 +6,15 @@ import dev.langchain4j.data.segment.TextSegment;
 import dev.langchain4j.model.embedding.EmbeddingModel;
 import dev.langchain4j.store.embedding.EmbeddingStore;
 import dev.langchain4j.store.embedding.EmbeddingStoreIngestor;
+import dev.langchain4j.store.embedding.filter.MetadataFilterBuilder;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 /**
- * 教学用的 RAG 摄取入口。先理解这条链，再把 API、权限和异步任务接进来：
- * 原文 -> 分块 -> embedding -> pgvector。检索和生成故意放在不同服务中。
+ * The server-side ingestion pipeline: text -> chunks -> embeddings -> pgvector.
+ *
+ * <p>Every segment carries the owning user and space so retrieval can apply the
+ * same authorization boundary as the relational document API.</p>
  */
 @Service
 public class RagPipeline {
@@ -31,16 +34,38 @@ public class RagPipeline {
         this.chunkOverlap = chunkOverlap;
     }
 
-    public void ingest(String noteId, String title, String content, String collection) {
+    /**
+     * Replaces all existing vectors for a document and indexes its current text.
+     * Replacing first makes retries idempotent and prevents duplicate chunks.
+     */
+    public void ingest(String documentId, String ownerId, String spaceId, String title,
+            String fileName, String mimeType, String content) {
+        removeDocument(documentId);
+
         Document document = Document.from(content);
-        document.metadata().put("note_id", noteId);
-        document.metadata().put("title", title);
-        document.metadata().put("collection", collection);
+        document.metadata()
+                .put("document_id", documentId)
+                .put("owner_id", ownerId)
+                .put("space_id", spaceId)
+                .put("title", title)
+                .put("file_name", fileName)
+                .put("mime_type", mimeType);
+
         EmbeddingStoreIngestor ingestor = EmbeddingStoreIngestor.builder()
                 .documentSplitter(DocumentSplitters.recursive(chunkSize, chunkOverlap))
                 .embeddingModel(embeddingModel)
                 .embeddingStore(embeddingStore)
                 .build();
         ingestor.ingest(document);
+    }
+
+    /** Removes every chunk belonging to one relational document. */
+    public void removeDocument(String documentId) {
+        embeddingStore.removeAll(MetadataFilterBuilder.metadataKey("document_id").isEqualTo(documentId));
+    }
+
+    /** Removes every chunk belonging to a knowledge space before that space is deleted. */
+    public void removeSpace(String spaceId) {
+        embeddingStore.removeAll(MetadataFilterBuilder.metadataKey("space_id").isEqualTo(spaceId));
     }
 }

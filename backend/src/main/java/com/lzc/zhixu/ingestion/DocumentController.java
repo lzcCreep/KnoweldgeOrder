@@ -10,6 +10,8 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -33,10 +35,11 @@ public class DocumentController {
             @RequestParam MultipartFile file,
             @RequestParam(required = false) String title,
             @RequestParam(required = false) String tags,
-            @RequestParam(name = "source_url", required = false) String sourceUrl) {
+            @RequestParam(name = "source_url", required = false) String sourceUrl,
+            @RequestParam(name = "local_directory", required = false) String localDirectory) {
         AuthService.User user = authService.requireUser(authorization);
         return ResponseEntity.status(HttpStatus.ACCEPTED)
-                .body(ApiResponse.of(documentService.create(user, spaceId, file, title, tags, sourceUrl)));
+                .body(ApiResponse.of(documentService.create(user, spaceId, file, title, tags, sourceUrl, localDirectory)));
     }
 
     @GetMapping("/spaces/{spaceId}/documents")
@@ -61,6 +64,13 @@ public class DocumentController {
         return ApiResponse.of(documentService.content(authService.requireUser(authorization), documentId));
     }
 
+    @PutMapping("/documents/{documentId}")
+    ApiResponse<Map<String, Object>> updateMetadata(@RequestHeader(HttpHeaders.AUTHORIZATION) String authorization,
+            @PathVariable String documentId, @RequestBody UpdateDocumentRequest request) {
+        return ApiResponse.of(documentService.updateMetadata(authService.requireUser(authorization), documentId,
+                request.collection(), request.favorite(), request.archived(), request.archive_folder_id()));
+    }
+
     @DeleteMapping("/documents/{documentId}")
     ApiResponse<Map<String, Boolean>> delete(@RequestHeader(HttpHeaders.AUTHORIZATION) String authorization,
             @PathVariable String documentId) {
@@ -79,4 +89,6 @@ public class DocumentController {
             @PathVariable String jobId) {
         return ApiResponse.of(documentService.retry(authService.requireUser(authorization), jobId));
     }
+
+    record UpdateDocumentRequest(String collection, Boolean favorite, Boolean archived, String archive_folder_id) { }
 }

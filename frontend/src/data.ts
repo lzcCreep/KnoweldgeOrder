@@ -1,3 +1,5 @@
+export type SyncStatus = 'local' | 'pending' | 'syncing' | 'synced' | 'conflict' | 'failed'
+
 export type Note = {
   id: number | string
   title: string
@@ -11,6 +13,19 @@ export type Note = {
   favorite?: boolean
   revision?: number
   createdAt?: string
+  updatedAt?: string
+  deletedAt?: string | null
+  spaceId?: string
+  syncStatus?: SyncStatus
+  syncError?: string | null
+  archived?: boolean
+  archiveFolderId?: string | null
+}
+
+export type Collection = {
+  name: string
+  color: string
+  count?: number
 }
 
 export const seedNotes: Note[] = [
@@ -81,7 +96,7 @@ export const seedNotes: Note[] = [
   },
 ]
 
-export const collections = [
+export const collections: Collection[] = [
   { name: '知识管理', count: 18, color: '#407a62' },
   { name: '产品与技术', count: 26, color: '#4f6fa8' },
   { name: '阅读与灵感', count: 14, color: '#b06c42' },

@@ -8,12 +8,15 @@
 **/node_modules/
 **/.npm-cache/
 **/dist/
+**/playwright-report/
+**/test-results/
 *.log
 
 # Java / Rust build output
 **/target/
 
 # Local data and generated packages
+**/knowledge-files/
 *.db
 *.db-shm
 *.db-wal
@@ -28,4 +31,3 @@
 .vscode/
 .DS_Store
 Thumbs.db
-

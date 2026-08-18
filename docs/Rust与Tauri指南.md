@@ -336,16 +336,17 @@ IPC 是 inter-process communication，即进程或运行环境之间传递消息
 SQLite 不是一个需要单独启动的数据库服务。它把数据库保存在一个文件中：
 
 ```text
-%APPDATA%\com.zhixu.desktop\zhixu.db
+D:\KnowledgeOrder\database\zhixu.db
 ```
 
-当前连接代码：
+当前连接代码先由 Rust 解析开发目录或安装目录，再传给 SQL 插件：
 
 ```ts
-const database = await Database.load('sqlite:zhixu.db')
+const path = await invoke<string>('resolve_database_path')
+const database = await Database.load(`sqlite:${path}`)
 ```
 
-相对路径会由 Tauri SQL 插件解析到应用数据目录，而不是项目源码目录。
+开发环境固定到项目根目录的 `database`，安装版优先使用程序旁边的 `database`。安装目录不可写时自动回退到 Tauri 应用数据目录。
 
 首次打开数据库后创建表：
 
@@ -605,13 +606,13 @@ rustup default stable
 
 ### 数据库在哪里
 
-Windows 当前路径：
+Windows 开发环境当前路径：
 
 ```text
-C:\Users\你的用户名\AppData\Roaming\com.zhixu.desktop\zhixu.db
+D:\KnowledgeOrder\database\zhixu.db
 ```
 
-不要在应用运行时随意覆盖数据库。做结构调整前先备份。
+安装版优先位于 `<安装目录>\database\zhixu.db`，目录不可写时回退到 `C:\Users\你的用户名\AppData\Roaming\com.zhixu.desktop\zhixu.db`。不要在应用运行时随意覆盖数据库。做结构调整前先备份。
 
 ### 安装包提示未知发布者
 

@@ -4,6 +4,7 @@ import com.lzc.zhixu.auth.AuthService;
 import com.lzc.zhixu.common.ApiResponse;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Positive;
 import java.util.Map;
 import org.springframework.http.HttpHeaders;
@@ -28,7 +29,8 @@ public class NoteController {
     @PostMapping("/spaces/{spaceId}/notes")
     ApiResponse<Map<String, Object>> create(@RequestHeader(HttpHeaders.AUTHORIZATION) String authorization,
             @PathVariable String spaceId, @Valid @RequestBody CreateNoteRequest request) {
-        return ApiResponse.of(noteService.create(authService.requireUser(authorization), spaceId, request.title(), request.content()));
+        return ApiResponse.of(noteService.create(authService.requireUser(authorization), spaceId,
+                request.id(), request.title(), request.content(), request.collection(), request.archived(), request.archive_folder_id()));
     }
 
     @GetMapping("/spaces/{spaceId}/notes")
@@ -47,7 +49,8 @@ public class NoteController {
     ApiResponse<Map<String, Object>> update(@RequestHeader(HttpHeaders.AUTHORIZATION) String authorization,
             @PathVariable String noteId, @Valid @RequestBody UpdateNoteRequest request) {
         return ApiResponse.of(noteService.update(authService.requireUser(authorization), noteId,
-                request.title(), request.content(), request.favorite(), request.revision()));
+                request.title(), request.content(), request.collection(), request.favorite(), request.archived(),
+                request.archive_folder_id(), request.revision()));
     }
 
     @DeleteMapping("/notes/{noteId}")
@@ -56,6 +59,13 @@ public class NoteController {
         return ApiResponse.of(Map.of("deleted", true));
     }
 
-    record CreateNoteRequest(@NotBlank String title, String content) { }
-    record UpdateNoteRequest(String title, String content, Boolean favorite, @Positive long revision) { }
+    record CreateNoteRequest(
+            @Pattern(regexp = "^nte_[A-Za-z0-9_-]{1,60}$") String id,
+            @NotBlank String title,
+            String content,
+            String collection,
+            Boolean archived,
+            String archive_folder_id) { }
+    record UpdateNoteRequest(String title, String content, String collection, Boolean favorite, Boolean archived,
+            String archive_folder_id, @Positive long revision) { }
 }

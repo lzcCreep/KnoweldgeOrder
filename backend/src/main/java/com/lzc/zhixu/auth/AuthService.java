@@ -14,8 +14,10 @@ import java.util.Map;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -35,13 +37,44 @@ public class AuthService {
     }
 
     public LoginResult login(String username, String password) {
-        User user = jdbc.sql("select id, username, password_hash, display_name from users where username = :username")
-                .param("username", username).query((rs, row) -> new User(rs.getString("id"), rs.getString("username"),
-                        rs.getString("password_hash"), rs.getString("display_name"))).optional().orElse(null);
+        User user = jdbc.sql("select id, username, password_hash, display_name, bio from users where lower(username) = lower(:username)")
+                .param("username", username.trim()).query((rs, row) -> new User(rs.getString("id"), rs.getString("username"),
+                        rs.getString("password_hash"), rs.getString("display_name"), rs.getString("bio"))).optional().orElse(null);
         if (user == null || !passwordEncoder.matches(password, user.passwordHash())) {
             throw new ApiException(HttpStatus.UNAUTHORIZED, "invalid_credentials", "用户名或密码错误");
         }
         return issueTokens(user);
+    }
+
+    @Transactional
+    public LoginResult register(String username, String password, String displayName) {
+        String normalizedUsername = username == null ? "" : username.trim().toLowerCase(java.util.Locale.ROOT);
+        if (!normalizedUsername.matches("[A-Za-z0-9_.-]{3,30}")) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "invalid_username", "用户名需为 3-30 位字母、数字、点、下划线或短横线");
+        }
+        if (password == null || password.length() < 6 || password.length() > 72) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "invalid_password", "密码长度需为 6-72 位");
+        }
+        String resolvedDisplayName = displayName == null || displayName.isBlank()
+                ? normalizedUsername
+                : displayName.trim();
+        if (resolvedDisplayName.length() > 30) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "invalid_display_name", "显示名称不能超过 30 个字符");
+        }
+
+        String userId = id("usr_");
+        try {
+            jdbc.sql("insert into users (id, username, password_hash, display_name, bio) "
+                            + "values (:id, :username, :passwordHash, :displayName, '')")
+                    .param("id", userId).param("username", normalizedUsername)
+                    .param("passwordHash", passwordEncoder.encode(password))
+                    .param("displayName", resolvedDisplayName).update();
+            jdbc.sql("insert into spaces (id, owner_id, name) values (:id, :ownerId, :name)")
+                    .param("id", id("spc_")).param("ownerId", userId).param("name", "个人空间").update();
+        } catch (DuplicateKeyException exception) {
+            throw new ApiException(HttpStatus.CONFLICT, "username_taken", "用户名已存在");
+        }
+        return issueTokens(findUser(userId));
     }
 
     public LoginResult refresh(String refreshToken) {
@@ -80,6 +113,13 @@ public class AuthService {
                 .param("ownerId", user.id()).query().listOfRows();
     }
 
+    public User updateProfile(User user, String displayName, String bio) {
+        jdbc.sql("update users set display_name = :displayName, bio = :bio where id = :id")
+                .param("displayName", displayName.trim()).param("bio", bio == null ? "" : bio.trim())
+                .param("id", user.id()).update();
+        return findUser(user.id());
+    }
+
     private LoginResult issueTokens(User user) {
         String accessToken = randomToken("atk_");
         String refreshToken = randomToken("rft_");
@@ -94,9 +134,9 @@ public class AuthService {
     }
 
     private User findUser(String id) {
-        return jdbc.sql("select id, username, password_hash, display_name from users where id = :id").param("id", id)
+        return jdbc.sql("select id, username, password_hash, display_name, bio from users where id = :id").param("id", id)
                 .query((rs, row) -> new User(rs.getString("id"), rs.getString("username"), rs.getString("password_hash"),
-                        rs.getString("display_name"))).single();
+                        rs.getString("display_name"), rs.getString("bio"))).single();
     }
 
     private Session findSessionByRefreshToken(String refreshToken) {
@@ -123,7 +163,7 @@ public class AuthService {
         }
     }
 
-    public record User(String id, String username, String passwordHash, String displayName) { }
+    public record User(String id, String username, String passwordHash, String displayName, String bio) { }
     private record Session(String id, String userId, Instant accessExpiresAt, Instant refreshExpiresAt, Instant revokedAt) { }
     public record LoginResult(User user, String accessToken, String refreshToken, long expiresIn) { }
 }
