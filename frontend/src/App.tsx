@@ -53,7 +53,7 @@ import {
 } from 'lucide-react'
 import { collections as defaultCollections, type Collection, type Note } from './data'
 import { ApiError, chatDirectlyWithModel, chatWithModel, createArchiveFolder as createCloudArchiveFolder, createNote as createCloudNote, createSpace, createTodo as createCloudTodo, deleteArchiveFolder as deleteCloudArchiveFolder, deleteDocument, deleteNote as deleteCloudNote, deleteTodo as deleteCloudTodo, getDocumentContent, getNote as getCloudNote, listArchive, listDocuments, listNotes, listTodos as listCloudTodos, login, logout, register, renameSpace, updateDocumentMetadata, updateNote as updateCloudNote, updateProfile, updateTodo as updateCloudTodo, uploadDocument, type ApiDocument, type ApiNote, type ApiSpace, type ApiTodo, type AuthSession, type ModelReference } from './api'
-import { completeNoteDelete, completeNoteSync, completeTodoDelete, completeTodoSync, createLocalArchiveFolder, createLocalNote, createTodo as createLocalTodo, defaultProfile, defaultSettings, deleteLocalArchiveFolder, deleteLocalNote, deleteTodo as deleteLocalTodo, importKnowledgeFile, listKnowledgeFiles, listPendingNoteChanges, listPendingTodoChanges, loadArchiveFolders, loadCollections, loadDocumentSources, loadNotes, loadProfile, loadSettings, loadTodos, markNoteSyncFailed, markNoteSyncing, markTodoSyncFailed, markTodoSyncing, mergeCloudNotes, mergeCloudTodos, openSourceFile, pendingNoteCount, persistCollections, persistProfile, persistSettings, readKnowledgeFile, saveDocumentSource, saveKnowledgeFile, selectKnowledgeDocument, selectSourceDirectory, updateKnowledgeFileMetadata, updateLocalNote, updateTodo as updateLocalTodo, type AppSettings, type ArchiveFolder, type LocalKnowledgeFile, type TodoItem, type UserProfile } from './storage'
+import { completeNoteDelete, completeNoteSync, completeTodoDelete, completeTodoSync, createLocalArchiveFolder, createLocalNote, createTodo as createLocalTodo, defaultProfile, defaultSettings, deleteLocalArchiveFolder, deleteLocalNote, deleteTodo as deleteLocalTodo, hasStoredProfile, importKnowledgeFile, listKnowledgeFiles, listPendingNoteChanges, listPendingTodoChanges, loadArchiveFolders, loadCollections, loadDocumentSources, loadNotes, loadProfile, loadSettings, loadTodos, markNoteSyncFailed, markNoteSyncing, markTodoSyncFailed, markTodoSyncing, mergeCloudNotes, mergeCloudTodos, openSourceFile, pendingNoteCount, persistCollections, persistProfile, persistSettings, readKnowledgeFile, saveDocumentSource, saveKnowledgeFile, selectKnowledgeDocument, selectSourceDirectory, updateKnowledgeFileMetadata, updateLocalNote, updateTodo as updateLocalTodo, type AppSettings, type ArchiveFolder, type LocalKnowledgeFile, type TodoItem, type UserProfile } from './storage'
 
 type View = '首页' | '全部笔记' | '知识库文件' | '草稿箱' | '收藏' | '归档' | '个人资料'
 type Message = { role: 'assistant' | 'user'; text: string; sources?: Note[]; fileSources?: LocalKnowledgeFile[]; cloudSources?: ModelReference[] }
@@ -238,6 +238,7 @@ const toApiTodo = (todo: TodoItem, session: AuthSession): ApiTodo => ({
 
 function App() {
   const [session, setSession] = useState<AuthSession | null>(null)
+  const [localProfile, setLocalProfile] = useState<UserProfile | null>(null)
   const [workspaceOpen, setWorkspaceOpen] = useState(false)
   const [appearancePreference, setAppearancePreference] = useState<AppSettings['appearance']>('system')
   const [systemAppearance, setSystemAppearance] = useState<ResolvedAppearance>(() => window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
@@ -264,19 +265,23 @@ function App() {
   }, [resolvedAppearance])
 
   return workspaceOpen ? (
-    <KnowledgeBaseApp appearance={resolvedAppearance} session={session} onAppearanceChange={setAppearancePreference} onLogout={() => { setSession(null); setWorkspaceOpen(false) }} />
+    <KnowledgeBaseApp appearance={resolvedAppearance} session={session} initialLocalProfile={localProfile} onAppearanceChange={setAppearancePreference} onLogout={() => { setSession(null); setWorkspaceOpen(false) }} />
   ) : (
     <LoginScreen
-      onLogin={(nextSession) => { setSession(nextSession); setWorkspaceOpen(true) }}
-      onOffline={() => { setSession(null); setWorkspaceOpen(true) }}
+      onLogin={(nextSession) => { setSession(nextSession); setLocalProfile(null); setWorkspaceOpen(true) }}
+      onOffline={(profile) => { setSession(null); setLocalProfile(profile); setWorkspaceOpen(true) }}
     />
   )
 }
 
-function LoginScreen({ onLogin, onOffline }: { onLogin: (session: AuthSession) => void; onOffline: () => void }) {
+function LoginScreen({ onLogin, onOffline }: { onLogin: (session: AuthSession) => void; onOffline: (profile: UserProfile) => void }) {
   const [mode, setMode] = useState<'login' | 'register'>('login')
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [offlineSetupOpen, setOfflineSetupOpen] = useState(false)
+  const [preparingOffline, setPreparingOffline] = useState(false)
+  const [savingOfflineProfile, setSavingOfflineProfile] = useState(false)
+  const [offlineSetupError, setOfflineSetupError] = useState('')
 
   const handleLogin = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -302,6 +307,46 @@ function LoginScreen({ onLogin, onOffline }: { onLogin: (session: AuthSession) =
       setError(loginError instanceof Error ? loginError.message : '登录失败')
     } finally {
       setSubmitting(false)
+    }
+  }
+
+  const handleOfflineEntry = async () => {
+    setError('')
+    setPreparingOffline(true)
+    try {
+      if (await hasStoredProfile()) {
+        onOffline(await loadProfile())
+        return
+      }
+      setOfflineSetupError('')
+      setOfflineSetupOpen(true)
+    } catch (profileError) {
+      console.error('读取本地资料失败', profileError)
+      setError('读取本地资料失败，请重试')
+    } finally {
+      setPreparingOffline(false)
+    }
+  }
+
+  const handleOfflineProfileSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    const displayName = String(new FormData(event.currentTarget).get('displayName') || '').trim()
+    if (!displayName) {
+      setOfflineSetupError('请输入你的名称')
+      return
+    }
+
+    setSavingOfflineProfile(true)
+    setOfflineSetupError('')
+    try {
+      const profile = { ...defaultProfile, displayName }
+      await persistProfile(profile)
+      onOffline(profile)
+    } catch (profileError) {
+      console.error('保存本地资料失败', profileError)
+      setOfflineSetupError('保存失败，请重试')
+    } finally {
+      setSavingOfflineProfile(false)
     }
   }
 
@@ -339,14 +384,49 @@ function LoginScreen({ onLogin, onOffline }: { onLogin: (session: AuthSession) =
           </button>
         </div>
         <div className="login-divider"><span>或</span></div>
-        <button className="offline-entry" type="button" onClick={onOffline}><CloudOff size={16} />离线进入本地知识库</button>
+        <button className="offline-entry" type="button" onClick={() => void handleOfflineEntry()} disabled={preparingOffline}><CloudOff size={16} />{preparingOffline ? '正在读取本地资料…' : '离线进入本地知识库'}</button>
         <p className="login-footnote">离线编辑会保存在当前设备，下次登录后继续同步。</p>
       </section>
+      {offlineSetupOpen && <LocalProfileSetup
+        error={offlineSetupError}
+        saving={savingOfflineProfile}
+        onClose={() => { if (!savingOfflineProfile) setOfflineSetupOpen(false) }}
+        onSubmit={handleOfflineProfileSubmit}
+      />}
     </main>
   )
 }
 
-function KnowledgeBaseApp({ session, appearance, onAppearanceChange, onLogout }: { session: AuthSession | null; appearance: ResolvedAppearance; onAppearanceChange: (appearance: AppSettings['appearance']) => void; onLogout: () => void }) {
+function LocalProfileSetup({ error, saving, onClose, onSubmit }: { error: string; saving: boolean; onClose: () => void; onSubmit: (event: FormEvent<HTMLFormElement>) => void }) {
+  useEffect(() => {
+    const handleKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.key === 'Escape' && !saving) onClose()
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [onClose, saving])
+
+  return (
+    <div className="modal-backdrop local-profile-backdrop" onMouseDown={onClose}>
+      <form className="name-modal local-profile-setup" role="dialog" aria-modal="true" aria-labelledby="local-profile-title" onSubmit={onSubmit} onMouseDown={(event) => event.stopPropagation()}>
+        <header>
+          <div><span id="local-profile-title">设置本地名称</span><small>名称仅保存在当前设备</small></div>
+          <button type="button" className="icon-button" onClick={onClose} aria-label="关闭" disabled={saving}><X size={18} /></button>
+        </header>
+        <div className="name-form">
+          <label><span>怎么称呼你</span><input name="displayName" aria-label="怎么称呼你" placeholder="输入你的名称" maxLength={30} autoComplete="name" required autoFocus /></label>
+          {error && <p className="local-profile-error" role="alert">{error}</p>}
+        </div>
+        <footer>
+          <button type="button" className="secondary-button" onClick={onClose} disabled={saving}>取消</button>
+          <button type="submit" className="primary-action" disabled={saving}><Check size={16} />{saving ? '正在保存…' : '进入知识库'}</button>
+        </footer>
+      </form>
+    </div>
+  )
+}
+
+function KnowledgeBaseApp({ session, initialLocalProfile, appearance, onAppearanceChange, onLogout }: { session: AuthSession | null; initialLocalProfile: UserProfile | null; appearance: ResolvedAppearance; onAppearanceChange: (appearance: AppSettings['appearance']) => void; onLogout: () => void }) {
   const [notes, setNotes] = useState<Note[]>([])
   const [todos, setTodos] = useState<TodoItem[]>([])
   const [spaces, setSpaces] = useState<ApiSpace[]>(() => session?.spaces || [])
@@ -373,7 +453,7 @@ function KnowledgeBaseApp({ session, appearance, onAppearanceChange, onLogout }:
     displayName: session.user.display_name,
     bio: session.user.bio || '',
     spaceName: session.spaces[0]?.name || defaultProfile.spaceName,
-  } : defaultProfile)
+  } : initialLocalProfile || defaultProfile)
   const [settings, setSettings] = useState<AppSettings>(defaultSettings)
   const [appVersion, setAppVersion] = useState(appVersionFallback)
   const [settingsOpen, setSettingsOpen] = useState(false)

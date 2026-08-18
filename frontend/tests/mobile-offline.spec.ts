@@ -1,5 +1,10 @@
 import { expect, test } from '@playwright/test'
 
+test.beforeEach(async ({ page }) => {
+  await page.route('https://fonts.googleapis.com/**', (route) => route.abort())
+  await page.route('https://fonts.gstatic.com/**', (route) => route.abort())
+})
+
 test('login and registration entry stay compact', async ({ page }, testInfo) => {
   test.skip(testInfo.project.name === 'mobile-landscape-chrome', 'Portrait and desktop cover the compact auth layout.')
 
@@ -15,6 +20,29 @@ test('login and registration entry stay compact', async ({ page }, testInfo) => 
   await expect(page.getByRole('button', { name: '返回登录' })).toBeVisible()
   expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1)
   await page.screenshot({ path: testInfo.outputPath(`${testInfo.project.name}-compact-register.png`), fullPage: true })
+})
+
+test('first local entry asks for a name once', async ({ page }, testInfo) => {
+  test.setTimeout(60_000)
+  await page.goto('/', { waitUntil: 'domcontentloaded' })
+  await page.evaluate(() => localStorage.removeItem('zhixu-profile'))
+  await page.getByRole('button', { name: '离线进入本地知识库' }).click()
+
+  const dialog = page.getByRole('dialog', { name: '设置本地名称' })
+  await expect(dialog).toBeVisible()
+  expect((await dialog.boundingBox())?.width).toBeLessThanOrEqual(390)
+  await page.screenshot({ path: testInfo.outputPath(`${testInfo.project.name}-first-local-profile.png`), fullPage: true })
+  await page.getByRole('textbox', { name: '怎么称呼你' }).fill('小知')
+  await dialog.getByRole('button', { name: '进入知识库' }).click()
+
+  await expect(page.getByRole('heading', { name: '你好，小知' })).toBeVisible()
+  await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('zhixu-profile') || '{}').displayName)).toBe('小知')
+
+  await page.goto('/', { waitUntil: 'domcontentloaded' })
+  await page.getByRole('button', { name: '离线进入本地知识库' }).click()
+  await expect(dialog).toHaveCount(0)
+  await expect(page.getByRole('heading', { name: '你好，小知' })).toBeVisible()
+  expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1)
 })
 
 test('offline note workflow remains usable', async ({ page }, testInfo) => {

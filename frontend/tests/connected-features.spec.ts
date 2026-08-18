@@ -2,6 +2,11 @@ import { expect, test } from '@playwright/test'
 
 const envelope = (data: unknown) => ({ data, request_id: 'req_test' })
 
+test.beforeEach(async ({ page }) => {
+  await page.route('https://fonts.googleapis.com/**', (route) => route.abort())
+  await page.route('https://fonts.gstatic.com/**', (route) => route.abort())
+})
+
 test('connected settings, spaces, profile, AI and Markdown preview are functional', async ({ page }, testInfo) => {
   test.setTimeout(60_000)
   test.skip(testInfo.project.name !== 'desktop-chrome', 'Connected workflow is covered once at desktop width.')

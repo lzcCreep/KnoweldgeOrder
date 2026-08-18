@@ -47,6 +47,7 @@ button, article { -webkit-tap-highlight-color: transparent; }
 .login-divider::before, .login-divider::after { height: 1px; flex: 1; content: ''; background: var(--line); }
 .offline-entry { display: flex; align-items: center; justify-content: center; width: 100%; height: 40px; gap: 8px; border: 1px solid #cbd4ce; border-radius: 6px; color: #526158; font-size: var(--font-body); font-weight: 600; background: white; cursor: pointer; }
 .offline-entry:hover { border-color: #95aa9d; color: var(--green); background: #f5f8f5; }
+.offline-entry:disabled { color: #909992; border-color: #d9ded9; background: #f0f2ef; cursor: wait; }
 .login-footnote { margin: 15px 0 0; color: #959d97; font-size: var(--font-caption); line-height: 1.5; text-align: center; }
 
 .app-shell {
@@ -673,6 +674,10 @@ body.assistant-resizing { cursor: col-resize; user-select: none; }
 .name-modal header small { color: #929a95; font-size: var(--font-caption); }
 .name-form { display: grid; gap: 17px; padding: 22px 20px; }
 .name-form label { display: grid; gap: 7px; }
+.local-profile-backdrop { z-index: 160; }
+.local-profile-setup { width: min(390px, 100%); }
+.local-profile-setup .name-form { gap: 9px; padding-block: 20px; }
+.local-profile-error { margin: 0; color: #a34339; font-size: var(--font-caption); line-height: 1.5; }
 .archive-target-modal { width: min(460px, 100%); }
 .archive-target-modal header > div { min-width: 0; }
 .archive-target-modal header small { overflow: hidden; max-width: 350px; text-overflow: ellipsis; white-space: nowrap; }

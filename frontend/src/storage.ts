@@ -73,9 +73,9 @@ export type ArchiveFolder = {
 }
 
 export const defaultProfile: UserProfile = {
-  username: 'lzc',
-  displayName: '林知远',
-  bio: '持续整理，持续思考。',
+  username: 'local',
+  displayName: '本地用户',
+  bio: '',
   spaceName: '个人空间',
 }
 
@@ -949,6 +949,16 @@ export async function loadProfile(): Promise<UserProfile> {
   const database = await getDatabase()
   const rows = await database.select<{ value: string }[]>('SELECT value FROM settings WHERE key = $1', ['profile'])
   return rows.length ? { ...defaultProfile, ...(JSON.parse(rows[0].value) as Partial<UserProfile>) } : defaultProfile
+}
+
+export async function hasStoredProfile(): Promise<boolean> {
+  if (!isTauri()) return localStorage.getItem('zhixu-profile') !== null
+  const database = await getDatabase()
+  const rows = await database.select<{ present: number }[]>(
+    'SELECT 1 AS present FROM settings WHERE key = $1 LIMIT 1',
+    ['profile'],
+  )
+  return rows.length > 0
 }
 
 export async function persistProfile(profile: UserProfile) {
